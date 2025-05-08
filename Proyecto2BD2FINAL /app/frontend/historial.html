@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mis pedidos</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+
+  <style>
+    .estrella {
+      font-size: 24px;
+      color: gray;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+  
+    .estrella.seleccionada {
+      color: gold;
+    }
+  </style>
+</head>
+<body class="container py-4">
+  <h1>Historial de Pedidos</h1>
+
+  <!-- filtros -->
+  <div class="mb-3 d-flex justify-content-end">
+    <label class="me-2">Ordenar por fecha:</label>
+    <select id="filtro-fecha" class="form-select w-auto">
+        <option value="recientes" selected>Más recientes primero</option>
+        <option value="antiguos">Más antiguos primero</option>
+    </select>
+  </div>
+
+  <div id="lista-pedidos" class="mt-4"></div>
+
+
+  <!-- Modal para dejar reseña -->
+  <div class="modal fade" id="modalResena" tabindex="-1">
+    <div class="modal-dialog">
+      <form id="form-resena" class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Dejar reseña</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="pedidoId">
+          <input type="hidden" name="restauranteId">
+
+          <!-- <input type="number" name="calificacion" class="form-control mb-2" placeholder="Calificación (1-5)" min="1" max="5" required> -->
+          <div id="estrellas" class="mb-2">
+            <span class="estrella" data-value="1">★</span>
+            <span class="estrella" data-value="2">★</span>
+            <span class="estrella" data-value="3">★</span>
+            <span class="estrella" data-value="4">★</span>
+            <span class="estrella" data-value="5">★</span>
+          </div>
+          <input type="hidden" name="calificacion" required>          
+
+          <textarea name="comentario" class="form-control mb-2" placeholder="Comentario" required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Enviar Reseña</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { apiGet, apiPost } from './js/api.js';
+    import { validarSesionYMostrarHeader } from './js/auth.js';
+
+    validarSesionYMostrarHeader();
+
+    const idUsuario = localStorage.getItem("usuario_id");
+    if (!idUsuario) {
+        alert("Inicia sesión primero.");
+        window.location.href = "login.html";
+    } // ejemplo quemado, reemplazar si hay login
+
+    // async function cargarPedidos() {
+    //     const pedidos = await apiGet(`/pedidos?usuario=${idUsuario}`);
+    //     const contenedor = document.getElementById("lista-pedidos");
+    //     const resenas = await apiGet(`/resenas/usuario/${idUsuario}`);
+
+    //     if (!pedidos.length) {
+    //         contenedor.innerHTML = "<p>No tienes pedidos registrados.</p>";
+    //         return;
+    //     }
+
+    //     // Cargar nombres de restaurantes
+    //     const pedidosConNombre = await Promise.all(pedidos.map(async p => {
+    //         const restaurante = await apiGet(`/restaurantes/${p.IdRestaurante}`);
+    //         return {
+    //         ...p,
+    //         NombreRestaurante: restaurante.nombre || "Restaurante desconocido"
+    //         };
+    //     }));
+
+    //     const resenasPorPedido = {};
+    //         resenas.forEach(r => {
+    //         resenasPorPedido[r.IdPedido] = r;  // indexadas por ID de pedido
+    //     });
+
+    //     contenedor.innerHTML = pedidosConNombre.map(p => {
+    //     const resena = resenasPorPedido[p._id];
+
+    //     const articulosHTML = p.ArticulosPedidos.map(a => `
+    //     <li>${a.Cantidad} x ${a.NombreArticulo} - $${a.Precio}</li>
+    //     `).join('');
+
+    //     const collapseId = `collapse-${p._id}`;
+    //     const toggleId = `toggle-${p._id}`;
+
+    //     return `
+    //     <div class="card mb-3 p-3" data-pedido-id="${p._id}">
+    //         <h5>Pedido en: ${p.NombreRestaurante}</h5>
+    //         <p>Fecha: ${new Date(p.FechaDePedido).toLocaleString()}</p>
+    //         <p>Monto total: $${p.MontoTotal}</p>
+
+    //         <div class="text-start">
+    //             <button class="btn btn-sm btn-link p-0 mb-2"
+    //                 id="${toggleId}"
+    //                 data-bs-toggle="collapse"
+    //                 data-bs-target="#${collapseId}"
+    //                 aria-expanded="false"
+    //                 aria-controls="${collapseId}"
+    //             >
+    //                 Detalle del pedido
+    //             </button>
+    //         </div>
+
+    //         <div class="collapse" id="${collapseId}">
+    //         <ul class="mb-2">${articulosHTML}</ul>
+    //         </div>
+
+    //         ${
+    //         resena
+    //             ? `<p class="text-success"><strong>Ya calificaste:</strong> ${resena.Calificacion}/5 ⭐</p>`
+    //             : `<button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalResena"
+    //                     data-idpedido="${p._id}" data-idrestaurante="${p.IdRestaurante}">
+    //                 Dejar reseña
+    //             </button>`
+    //         }
+    //         </div>
+    //         `;
+    //     }).join('');
+    // }
+
+    function renderPedidos(pedidos, reseñasPorPedido) {
+    const contenedor = document.getElementById("lista-pedidos");
+
+    contenedor.innerHTML = pedidos.map(p => {
+        const resena = reseñasPorPedido[p._id];
+        const articulosHTML = p.ArticulosPedidos.map(a => `
+        <li>${a.Cantidad} x ${a.NombreArticulo} - $${a.Precio}</li>
+        `).join('');
+
+        const collapseId = `collapse-${p._id}`;
+        return `
+        <div class="card mb-3 p-3" data-pedido-id="${p._id}">
+            <h5>Pedido en: ${p.NombreRestaurante}</h5>
+            <p>Fecha: ${new Date(p.FechaDePedido).toLocaleString()}</p>
+            <p>Monto total: $${p.MontoTotal}</p>
+
+            <div class="text-start">
+            <button class="btn btn-sm btn-link p-0 mb-2"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#${collapseId}"
+                    aria-expanded="false"
+                    aria-controls="${collapseId}">
+                Detalle del pedido
+            </button>
+            </div>
+            <div class="collapse" id="${collapseId}">
+            <ul class="mb-2">${articulosHTML}</ul>
+            </div>
+
+            ${
+            resena
+                ? `<p class="text-success"><strong>Ya calificaste:</strong> ${resena.Calificacion}/5 ⭐</p>`
+                : `<button class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalResena"
+                        data-idpedido="${p._id}" data-idrestaurante="${p.IdRestaurante}">
+                    Dejar reseña
+                </button>`
+            }
+        </div>
+        `;
+    }).join('');
+    }
+
+    async function cargarPedidos() {
+    const pedidos = await apiGet(`/pedidos?usuario=${idUsuario}`);
+    const resenas = await apiGet(`/resenas/usuario/${idUsuario}`);
+
+    const reseñasPorPedido = {};
+    resenas.forEach(r => reseñasPorPedido[r.IdPedido] = r);
+
+    const pedidosConNombre = await Promise.all(pedidos.map(async p => {
+        const restaurante = await apiGet(`/restaurantes/${p.IdRestaurante}`);
+        return {
+        ...p,
+        NombreRestaurante: restaurante.nombre || "Restaurante desconocido"
+        };
+    }));
+
+    // Aplicar orden por defecto
+    aplicarFiltroYRender(pedidosConNombre, reseñasPorPedido);
+    }
+
+    function aplicarFiltroYRender(pedidos, reseñasPorPedido) {
+    const orden = document.getElementById("filtro-fecha").value;
+
+    pedidos.sort((a, b) => {
+        const fechaA = new Date(a.FechaDePedido);
+        const fechaB = new Date(b.FechaDePedido);
+        return orden === "recientes"
+        ? fechaB - fechaA
+        : fechaA - fechaB;
+    });
+
+    renderPedidos(pedidos, reseñasPorPedido);
+    }
+
+    document.getElementById("filtro-fecha").addEventListener("change", () => {
+    aplicarFiltroYRender(pedidosCache, reseñasPorPedidoCache);
+    });
+
+    // Captura el ID del pedido cuando se abre el modal
+    const modal = document.getElementById('modalResena');
+    modal.addEventListener('show.bs.modal', event => {
+      const button = event.relatedTarget;
+      document.querySelector('[name="pedidoId"]').value = button.dataset.idpedido;
+      document.querySelector('[name="restauranteId"]').value = button.dataset.idrestaurante;
+    });
+
+    // Envío de reseña
+    document.getElementById("form-resena").addEventListener("submit", async e => {
+      e.preventDefault();
+      const form = e.target;
+      const reseña = {
+        Calificacion: parseInt(form.calificacion.value),
+        Comentario: form.comentario.value,
+        Fecha: new Date().toISOString().split("T")[0],
+        IdPedido: form.pedidoId.value,
+        IdRestaurante: form.restauranteId.value,
+        IdUsuario: idUsuario
+      };
+
+      const res = await apiPost("/resenas", reseña);
+      alert(res.mensaje || "Reseña enviada.");
+      const card = document.querySelector(`[data-pedido-id="${reseña.IdPedido}"]`);
+      if (card) {
+            const btn = card.querySelector(".btn[data-idpedido]");
+            if (btn) btn.remove();
+
+            const mensaje = document.createElement("p");
+            mensaje.className = "text-success mt-2";
+            mensaje.innerHTML = `<strong>Ya calificaste:</strong> ${reseña.Calificacion}/5 ⭐`;
+            card.appendChild(mensaje);
+      }
+
+      form.reset();
+      estrellas.forEach(e => e.classList.remove("seleccionada"));
+      const modalInstance = bootstrap.Modal.getInstance(modal);
+      modalInstance.hide();
+    });
+
+    // txt dinamico para detalle
+    document.addEventListener('shown.bs.collapse', function (e) {
+        const btn = document.querySelector(`button[data-bs-target="#${e.target.id}"]`);
+        if (btn) btn.textContent = "Ocultar detalle";
+    });
+
+    document.addEventListener('hidden.bs.collapse', function (e) {
+        const btn = document.querySelector(`button[data-bs-target="#${e.target.id}"]`);
+        if (btn) btn.textContent = "Detalle del pedido";
+    });
+
+    // calificacion
+    const estrellas = document.querySelectorAll("#estrellas .estrella");
+    const inputCalificacion = document.querySelector('[name="calificacion"]');
+
+    estrellas.forEach(estrella => {
+    estrella.addEventListener("click", () => {
+        const valor = estrella.dataset.value;
+        inputCalificacion.value = valor;
+
+        estrellas.forEach(e => {
+        e.classList.toggle("seleccionada", e.dataset.value <= valor);
+        });
+    });
+    });
+
+    cargarPedidos();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

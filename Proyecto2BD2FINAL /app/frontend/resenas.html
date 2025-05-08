@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mis Reseñas</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+</head>
+<body class="container py-4">
+  <h1>Mis Reseñas</h1>
+  <div id="lista-resenas" class="mt-4"></div>
+
+  <script type="module">
+    import { apiGet, apiDelete } from './js/api.js';
+    import { validarSesionYMostrarHeader } from './js/auth.js';
+
+    validarSesionYMostrarHeader();
+
+    const idUsuario = localStorage.getItem("usuario_id");
+    if (!idUsuario) {
+        alert("Inicia sesión primero.");
+        window.location.href = "login.html";
+    } // usr quemado, reemplazar con login
+
+    async function obtenerNombreRestaurante(id) {
+        try {
+            const restaurante = await apiGet(`/restaurantes/${id}`);
+            return restaurante.nombre || "Restaurante no encontrado";
+        } catch (e) {
+            return "Error al obtener restaurante";
+        }
+    }
+
+    async function cargarResenas() {
+        const resenas = await apiGet(`/resenas/usuario/${idUsuario}`);
+        const contenedor = document.getElementById("lista-resenas");
+
+        if (!resenas.length) {
+            contenedor.innerHTML = "<p>No has enviado ninguna reseña.</p>";
+            return;
+        }
+
+        const tarjetas = await Promise.all(
+            resenas.map(async (r) => {
+            const nombreRestaurante = await obtenerNombreRestaurante(r.IdRestaurante);
+            return `
+                <div class="card mb-3 p-3" data-id="${r._id}">
+                    <div class="d-flex justify-content-between align-items-start">
+                    <h5>${nombreRestaurante}</h5>
+                    <button class="btn btn-sm btn-eliminar" data-id="${r._id}" title="Eliminar reseña">
+                        x
+                    </button>
+                    </div>
+                    <p><strong text-muted>ID reseña:</strong> ${r._id}</p>
+                    <p><strong>ID pedido:</strong> ${r.IdPedido}</p>
+                    <p><strong>Calificación:</strong> ${r.Calificacion}/5</p>
+                    <p><strong>Comentario:</strong> ${r.Comentario}</p>
+                    <p class="text-muted"><strong>Fecha:</strong> ${r.Fecha}</p>
+                </div>
+            `;
+            })
+        );
+
+        contenedor.innerHTML = tarjetas.join('');
+    }
+
+    document.addEventListener("click", async (e) => {
+        if (e.target.classList.contains("btn-eliminar")) {
+            const id = e.target.dataset.id;
+            if (confirm("¿Estás seguro de eliminar esta reseña?")) {
+            const res = await apiDelete(`/resenas/${id}`);
+            alert(res.mensaje || "Reseña eliminada");
+
+            // Eliminar visualmente sin recargar
+            const card = e.target.closest(".card");
+            if (card) card.remove();
+            }
+        }
+    });
+
+    cargarResenas();
+  </script>
+</body>
+</html>
